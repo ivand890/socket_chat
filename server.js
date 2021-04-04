@@ -1,14 +1,23 @@
 const { Server } = require("net");
 
-
 const PORT = 8000;
 const HOST = "localhost";
 const END = "END";
 
+const connections = new Map();
+
 const error = (message) => {
   console.error(message);
   process.exit(1);
-}
+};
+
+const sentMessage = (message, origin) => {
+  for (const socket of connections.keys()) {
+    if (socket !== origin) {
+      socket.write(message);
+    }
+  }
+};
 
 const listen = (host, port) => {
   const server = new Server();
@@ -17,15 +26,22 @@ const listen = (host, port) => {
     console.log(`Connection from: ${remoteSocket}`);
     socket.setEncoding("utf8");
     socket.on("data", (message) => {
-      if (message === END) {
-        socket.end();
+      if (message === END) socket.end();
+      if (!connections.has(socket)) {
+        connections.set(socket, message);
+        console.log(`Set username: ${message} for ${remoteSocket}`);
       } else {
-        console.log(`${remoteSocket} -> ${message}`);
+        const fullMessage = `[${connections.get(socket)}]: ${message}`;
+        console.log(`${remoteSocket} -> ${fullMessage}`);
+        sentMessage(fullMessage, socket);
       }
     });
-    socket.on("close", () =>
-      console.log(`Cliente from: ${remoteSocket} was disconnected`)
-    );
+    socket.on("close", () => {
+      console.log(
+        `[${connections.get(socket)}] from: ${remoteSocket} was disconnected.`
+      );
+      connections.delete(socket);
+    });
   });
 
   server.listen({ host, port }, () =>
@@ -34,8 +50,8 @@ const listen = (host, port) => {
 
   server.on("error", (err) => {
     error(err.message);
-  })
-}
+  });
+};
 
 const main = () => {
   if (process.argv.length !== 3) {
@@ -47,7 +63,7 @@ const main = () => {
   }
   port = parseInt(port, 10);
   listen(HOST, port);
-}
+};
 
 if (require.main === module) {
   main();
